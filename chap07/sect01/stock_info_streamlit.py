@@ -1,4 +1,4 @@
-from gpt_functions import get_current_time, tools, get_yf_stock_info
+from gpt_functions import get_current_time, tools, get_yf_stock_info, get_yf_stock_history, get_yf_stock_recommendations
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
@@ -51,6 +51,10 @@ if user_input := st.chat_input():
                 func_result = get_current_time(timezone=arguments['timezone'])
             elif tool_name == 'get_yf_stock_info':
                 func_result = get_yf_stock_info(ticker=arguments['ticker'])
+            elif tool_name == 'get_yf_stock_history':
+                func_result = get_yf_stock_history(ticker=arguments['ticker'], period=arguments['period'])
+            elif tool_name == 'get_yf_stock_recommendations':
+                func_result = get_yf_stock_recommendations(ticker=arguments['ticker'])
 
             st.session_state.messages.append({
                 "role": "function",

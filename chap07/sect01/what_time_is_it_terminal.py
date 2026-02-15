@@ -36,18 +36,22 @@ while True:
 
     tool_calls = ai_message.tool_calls
     if tool_calls: # toole_calls가 존재하는 경우
-        tool_name = tool_calls[0].function.name
-        tool_call_id = tool_calls[0].id
+        for tool_call in tool_calls:
 
-        arguments = json.loads(tool_calls[0].function.arguments) # arguments는 JSON 문자열이므로 파싱 필요
+            tool_name = tool_call.function.name
+            tool_call_id = tool_call.id
 
-        if tool_name == "get_current_time":
-            messages.append({
-                "role": "function", # role을 function으로 설정
-                "tool_call_id": tool_call_id,
-                "name": tool_name,
-                "content": get_current_time(timezone=arguments['timezone']) # 함수 실행 결과를 content로 설정
-            })
+            arguments = json.loads(tool_call.function.arguments) # arguments는 JSON 문자열이므로 파싱 필요
+
+            if tool_name == "get_current_time":
+                messages.append({
+                    "role": "function", # role을 function으로 설정
+                    "tool_call_id": tool_call_id,
+                    "name": tool_name,
+                    "content": get_current_time(timezone=arguments['timezone']) # 함수 실행 결과를 content로 설정
+                })
+
+        messages.append({'role': 'system', 'content': '이제 주어진 결과를 바탕으로 답변할 차례다.'})
 
         ai_response = get_ai_response(messages, tools=tools)
         ai_message = ai_response.choices[0].message

@@ -48,21 +48,20 @@ if user_input := st.chat_input():
             arguments = json.loads(tool_call.function.arguments) # arguments는 JSON 문자열이므로 파싱 필요
 
             if tool_name == "get_current_time":
-                st.session_state.messages.append({
-                    "role": "function", # role을 function으로 설정
-                    "tool_call_id": tool_call_id,
-                    "name": tool_name,
-                    "content": get_current_time(timezone=arguments['timezone']) # 함수 실행 결과를 content로 설정
-                })
+                func_result = get_current_time(timezone=arguments['timezone'])
             elif tool_name == 'get_yf_stock_info':
-                st.session_state.messages.append({
-                    "role": "function",
-                    "tool_call_id": tool_call_id,
-                    "name": tool_name,
-                    "content": get_yf_stock_info(ticker=arguments["ticker"])
-                })
+                func_result = get_yf_stock_info(ticker=arguments['ticker'])
+
+            st.session_state.messages.append({
+                "role": "function",
+                "tool_call_id": tool_call_id,
+                "name": tool_name,
+                "content": func_result
+            })  
 
         st.session_state.messages.append({'role': 'system', 'content': '이제 주어진 결과를 바탕으로 답변할 차례다.'})
+
+        
 
         ai_response = get_ai_response(st.session_state.messages)
         ai_message = ai_response.choices[0].message

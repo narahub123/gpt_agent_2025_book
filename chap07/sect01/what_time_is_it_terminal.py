@@ -2,6 +2,7 @@ from gpt_functions import get_current_time, tools
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
+import json
 
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
@@ -38,12 +39,14 @@ while True:
         tool_name = tool_calls[0].function.name
         tool_call_id = tool_calls[0].id
 
+        arguments = json.loads(tool_calls[0].function.arguments) # arguments는 JSON 문자열이므로 파싱 필요
+
         if tool_name == "get_current_time":
             messages.append({
                 "role": "function", # role을 function으로 설정
                 "tool_call_id": tool_call_id,
                 "name": tool_name,
-                "content": get_current_time() # 함수 실행 결과를 content로 설정
+                "content": get_current_time(timezone=arguments['timezone']) # 함수 실행 결과를 content로 설정
             })
 
         ai_response = get_ai_response(messages, tools=tools)

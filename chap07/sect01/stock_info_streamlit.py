@@ -10,14 +10,20 @@ api_key = os.getenv("OPENAI_API_KEY")
 
 client= OpenAI(api_key=api_key)
 
-def get_ai_response(messages, tools=None):
+def get_ai_response(messages, tools=None, stream=True):
     response = client.chat.completions.create(
         model="gpt-4o", 
+        stream=stream,
         messages=messages,
         tools=tools
     )
 
-    return response
+    if stream:
+        for chunk in response:
+            yield chunk
+
+    else:
+         return response
 
 st.title("💬 Chatbot")
 
@@ -35,7 +41,19 @@ if user_input := st.chat_input():
     st.chat_message('user').write(user_input)
 
     ai_response = get_ai_response(st.session_state.messages, tools=tools)
-    print(ai_response)
+    # print(ai_response)
+
+    content = ''
+
+    for chunk in ai_response:
+        content_chunk = chunk.choices[0].delta.content
+        if content_chunk:
+            print(content_chunk, end='')
+            content += content_chunk
+    
+    print('================')
+    print(content)
+
     ai_message = ai_response.choices[0].message
     
     tool_calls = ai_message.tool_calls

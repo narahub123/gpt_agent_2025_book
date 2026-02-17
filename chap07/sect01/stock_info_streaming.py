@@ -4,11 +4,40 @@ from dotenv import load_dotenv
 import os
 import json
 import streamlit as st
+from collections import defaultdict
+
 
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
 
 client= OpenAI(api_key=api_key)
+
+def tool_list_to_tool_obj(tools):
+    tool_calls_dict = defaultdict(lambda: {
+        "id": None,
+        'function': {
+            "arguments": "",
+            'name': None
+        },
+        'type': None
+    })
+
+    for tool_call in tools:
+        if tool_call.id is not None:
+            tool_calls_dict[tool_call.index]['id'] = tool_call.id
+        
+        if tool_call.function.name is not None:
+            tool_calls_dict[tool_call.index]['function']['name'] = tool_call.function.name
+        
+        tool_calls_dict[tool_call.index]['function']['arguments'] += tool_call.function.arguments
+
+        if tool_call.type is not None:
+            tool_calls_dict[tool_call.index]['type'] = tool_call.type
+
+    tool_calls_list = list(tool_calls_dict.values())
+
+    return {"tool_calls": tool_calls_list}
+
 
 def get_ai_response(messages, tools=None, stream=True):
     response = client.chat.completions.create(
@@ -45,6 +74,7 @@ if user_input := st.chat_input():
 
     content = ''
     tool_calls = None
+    tool_calls_chunk = []
 
     with st.chat_message('assistant').empty():
         for chunk in ai_response:
@@ -53,9 +83,31 @@ if user_input := st.chat_input():
                 print(content_chunk, end='')
                 content += content_chunk
                 st.markdown(content) # 스트림릿 챗 메시지에 마크다운으로 출력 
+
+            # print(chunk)
+            if chunk.choices[0].delta.tool_calls:
+                tool_calls_chunk += chunk.choices[0].delta.tool_calls
+
+        tool_obj = tool_list_to_tool_obj(tool_calls_chunk)
+        tool_calls = tool_obj['tool_calls']
+
+        if len(tool_calls) > 0:
+            print(tool_calls)
+
+            tool_call_msg = [tool_call['function'] for tool_call in tool_calls] 
+            st.write(tool_call_msg)
     
     print('\n================')
     print(content)
+
+    # print('\n================= tool_calls_chunk')
+    # for tool_call_chunk in tool_calls_chunk:
+    #     print(tool_call_chunk)
+
+    tool_obj = tool_list_to_tool_obj(tool_calls_chunk)
+    tool_calls = tool_obj['tool_calls']
+
+    print(tool_calls)
 
     # ai_message = ai_response.choices[0].message
     
@@ -64,10 +116,15 @@ if user_input := st.chat_input():
     if tool_calls: # toole_calls가 존재하는 경우
         for tool_call in tool_calls:
 
-            tool_name = tool_call.function.name
-            tool_call_id = tool_call.id
+            # tool_name = tool_call.function.name
+            # tool_call_id = tool_call.id
 
-            arguments = json.loads(tool_call.function.arguments) # arguments는 JSON 문자열이므로 파싱 필요
+            # arguments = json.loads(tool_call.function.arguments) # arguments는 JSON 문자열이므로 파싱 필요
+
+            # 딕셔너리 형태에서 받기\
+            tool_name = tool_call['function']['name']
+            tool_call_id = tool_call['id']
+            arguments = json.loads(tool_call['function']['arguments'])
 
             if tool_name == "get_current_time":
                 func_result = get_current_time(timezone=arguments['timezone'])
@@ -85,12 +142,23 @@ if user_input := st.chat_input():
                 "content": func_result
             })  
 
-        st.session_state.messages.append({'role': 'system', 'content': '이제 주어진 결과를 바탕으로 답변할 차례다.'})
-
-        
-
+        st.session_state.messages.append({
+            'role': 'system', 
+            'content': '이제 주어진 결과를 바탕으로 답변할 차례다.'
+            })
         ai_response = get_ai_response(st.session_state.messages)
-        ai_message = ai_response.choices[0].message
+
+        content = ''
+
+        with st.chat_message("assistant").empty():
+            for chunk in ai_response:
+                content_chunk = chunk.choices[0].delta.content
+                if content_chunk:
+                    print(content_chunk, end='')
+                    content += content_chunk
+                    st.markdown(content)
+
+        # ai_message = ai_response.choices[0].message
 
     st.session_state.messages.append({
         'role': 'assistant',

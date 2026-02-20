@@ -37,7 +37,7 @@ for msg in st.session_state.messages:
         if isinstance(msg, SystemMessage):
             st.chat_message('system').write(msg.content)
         elif isinstance(msg, AIMessage):
-            st.chat_message('assistance').write(msg.content)
+            st.chat_message('assistant').write(msg.content)
         elif isinstance(msg, HumanMessage):
             st.chat_message('user').write(msg.content)
 
@@ -62,6 +62,10 @@ if prompt := st.chat_input():
     for doc in docs:
         print('-------------------------')
         print(doc)
+
+        with st.expander(f"**문서:** {doc.metadata.get('source', '알 수 없음')}"):
+            st.write(f"**page:**{doc.metadata.get('page', '')}")
+            st.write(doc.page_content)
     print("==========================")
 
     with st.spinner(f"AI가 답변을 준비중입니다...'{argumented_query}'" ):

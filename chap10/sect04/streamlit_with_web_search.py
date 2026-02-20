@@ -11,6 +11,10 @@ import pytz
 from langchain_community.tools import DuckDuckGoSearchResults
 from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
 
+from youtube_search import YoutubeSearch
+from langchain_community.document_loaders import YoutubeLoader
+from typing import List
+
 import os 
 from dotenv import load_dotenv
 
@@ -62,8 +66,39 @@ def get_web_search(query: str, search_period: str) -> str:
 
     return docs
 
-tools = [get_current_time, get_web_search]
-tool_dict = {"get_current_time": get_current_time, "get_web_search": get_web_search}
+@tool
+def get_youtube_search(query: str) -> List:
+    """
+    유튜브 검색한 뒤, 영상들의 내용을 반환하는 함수,
+
+    Args:
+        query (str): 검색어
+
+    Returns:
+        List: 검색 결과
+    """
+    print('-------YOUTUBE SEARCH----------')
+    print(query)
+    videos = YoutubeSearch(query, max_results=5).to_dict()
+
+    videos = [video for video in videos if len(video['duration']) <= 5]
+
+    for video in videos:
+        video_url = 'https://youtube.com' + video['url_suffix']
+
+        loader = YoutubeLoader.from_youtube_url(
+            video_url,
+            language=['ko', 'en']
+        )
+
+        video['video_url'] = video_url
+        video['content'] = loader.load()
+
+    return videos
+
+
+tools = [get_current_time, get_web_search, get_youtube_search]
+tool_dict = {"get_current_time": get_current_time, "get_web_search": get_web_search, "get_youtube_search": get_youtube_search}
 
 llm_with_tools = llm.bind_tools(tools)
 

@@ -138,7 +138,7 @@ state = State(
             너희 AI들은 사용자의 요구에 맞는 책을 쓰는 작가 팀이다.
             사용자가 사용하는 언어로 대화하라.
 
-            현재 시각은 {datetime.now().strftime('%Y-%m=%d %H:%M:%S')}이다.
+            현재 시각은 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}이다.
             """
         )
     ]

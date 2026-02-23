@@ -7,6 +7,7 @@ from typing_extensions import TypedDict
 from typing import List
 
 from utils import save_state, get_outline, save_outline
+from models import Task
 
 from datetime import datetime 
 
@@ -27,13 +28,66 @@ llm = ChatOpenAI(model="gpt-4o")
 
 # 상태 정의 
 class State(TypedDict):
-    messages: List[AnyMessage|str]
+    messages: List[AnyMessage | str]
+    task_history: List[Task]
+
+# 다음에 할 일이 무엇인지 판단하는 노드 : supervisor 
+def supervisor(state:State):
+    print("\n\n==============SUPERVISOR================")
+
+    supervisor_system_prompt = PromptTemplate.from_template(
+        """
+        너는 ai 팀의 supervisor로서 AI 팀의 작업을 관리하고 지도한다.
+        사용자가 원하는 책을 써야 한다는 최종 목표를 염두에 두고, 
+        사용자의 요구를 달성하기 위해 현재 해야 할 일이 무엇인지를 결정한다.
+
+        supervisor가 활용할 수 있는 agent는 다음과 같다.
+        - content_strategist: 사용자의 요구 사항이 명확해졌을 대 사용한다. AI 팀의 콘텐츠 전략을 결정하고, 전체 책의 목차(outline)을 작성한다. 
+        - communicator: AI 팀에서 해야 할 일을 스스로 판단할 수 없을 때 사용한다. 사용자에게 진행 상황을 보고하고, 다음 지시를 물어본다.
+
+        아래 내용을 고려하여, 현재 해야할 일이 무엇인지, 사용할 수 있는 agent를 단답으로 말하라,
+        
+        ---------------------------
+        - 지난 목차 : {outline}
+        ---------------------------
+        - 이전 대화 내용 : {messages}
+        """
+    )
+
+    supervisor_chain = supervisor_system_prompt | llm.with_structured_output(Task)
+
+    #  상태 메시지 가져오기 
+    messages = state.get("messages", [])
+    
+    # 입력값 정의 
+    inputs = {
+        'messages': messages, 
+        "outline": get_outline(current_path)
+    }
+
+    task = supervisor_chain.invoke(inputs)
+    task_history = state.get('task_history', [])
+    task_history.append(task)
+
+    supervisor_message = AIMessage(f"[Supervisor] {task}")
+    messages.append(supervisor_message)
+    print(supervisor_message.content)
+
+    return {
+        'messages': messages,
+        'task_history': task_history
+    }
+
+def supervisor_router(state: State):
+    task=state['task_history'][-1]
+    return task.agent
+
 
 # 목차를 작성하는 노드 : content_strategist
 def content_strategist (state: State):
     print("\n\n==============CONTENT STRATEGIST================")
 
-    content_strategist_system_prompt = PromptTemplate.from_template(
+    supervisor_system_prompt = PromptTemplate.from_template(
         """
         너는 책을 쓰는 AI 팀의 콘텐츠 전략가(Content Strategist)로서, 
         이전 대화 내용을 바탕으로 사용자의 요구 사항을 분석하고, AI팀이 쓸 책의 세부 목차를 결정한다.
@@ -47,7 +101,7 @@ def content_strategist (state: State):
         """
     )
 
-    content_strategist_chain = content_strategist_system_prompt | llm | StrOutputParser()
+    supervisor_chain = supervisor_system_prompt | llm | StrOutputParser()
 
     #  상태 메시지 가져오기 
     messages = state['messages']
@@ -62,7 +116,7 @@ def content_strategist (state: State):
 
     gathered = ''
 
-    for chunk in content_strategist_chain.stream(inputs):
+    for chunk in supervisor_chain.stream(inputs):
         gathered += chunk
         print(chunk, end="")
 
@@ -70,11 +124,34 @@ def content_strategist (state: State):
 
     save_outline(current_path, gathered)
 
-    content_strategist_message = f"[Content Strategist] 목차 작성 완료"
-    print(content_strategist_message)
-    messages.append(AIMessage(content_strategist_message))
+    supervisor_message = f"[Content Strategist] 목차 작성 완료"
+    print(supervisor_message)
+    messages.append(AIMessage(supervisor_message))
 
-    return {'messages': messages}
+    task_history = state.get("task_history", []) # task_history 가져오기 
+
+    if task_history[-1].agent != "content_strategist":
+        raise ValueError(f"Content Strategist가 아닌 agent가 목차 작성을 시도하고 있습니다. \n {task_history[-1]}")
+    
+    task_history[-1].done = True
+    task_history[-1].done_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    new_task = Task(
+        agent='communicator',
+        done=False,
+        description="AI 팀의 진행 상황을 사용자에게 보고하고, 사용자의 의견을 파악하기 위해 대화를 나눈다.",
+        done_at=""
+    )
+
+    task_history.append(new_task)
+
+    print(new_task)
+
+
+    return {
+        'messages': messages, 
+        'task_history': task_history
+    }
 
 # 사용자와 대화할 노드(agent) : communicator 
 def communicator(state: State):
@@ -87,6 +164,8 @@ def communicator(state: State):
 
         사용자도 outline(목차)을 이미 보고 있으므로, 다시 출력할 필요없다.
 
+        outline: {outline}
+        ----------------------------------
         messages: {messages}
         """
     )
@@ -97,7 +176,7 @@ def communicator(state: State):
     messages = state['messages']
 
     # 입력값 정의 
-    inputs = {'messages': messages}
+    inputs = {'messages': messages, "outline": get_outline(current_path)} # 현 outline 추가 : communicator가 목차를 몰라 엉뚱한 말하는 것을 방지
 
     gathered = None
 
@@ -112,17 +191,37 @@ def communicator(state: State):
 
     messages.append(gathered)
 
-    return {'messages': messages}
+    task_history = state.get("task_history", []) # task_history 가져오기 
+
+    if task_history[-1].agent != "communicator":
+        raise ValueError(f"Communicator가 아닌 agent가 대화를 시도하고 있습니다. \n {task_history[-1]}")
+    
+    task_history[-1].done = True
+    task_history[-1].done_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    return {
+        'messages': messages,
+        'task_history': task_history
+    }
 
 # 상태 그래프 정의 
 graph_builder = StateGraph(State)
 
 # Nodes 
+graph_builder.add_node("supervisor", supervisor)
 graph_builder.add_node("communicator", communicator)
 graph_builder.add_node("content_strategist", content_strategist)
 
 # Edges 
-graph_builder.add_edge(START, 'content_strategist')
+graph_builder.add_edge(START, 'supervisor')
+graph_builder.add_conditional_edges(
+    "supervisor", 
+    supervisor_router,
+    {
+        "content_strategist": "content_strategist",
+        "communicator": "communicator"
+    }
+)
 graph_builder.add_edge('content_strategist', 'communicator')
 graph_builder.add_edge('communicator', END)
 
@@ -141,7 +240,8 @@ state = State(
             현재 시각은 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}이다.
             """
         )
-    ]
+    ],
+    task_history=[],
 )
 
 # 터미널 창에서 사용자의 입력을 받고 graph를 실행하는 부분 

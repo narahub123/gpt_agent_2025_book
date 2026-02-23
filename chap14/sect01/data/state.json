@@ -2,55 +2,88 @@
     "messages": [
         [
             "SystemMessage",
-            "\n            너희 AI들은 사용자의 요구에 맞는 책을 쓰는 작가 팀이다.\n            사용자가 사용하는 언어로 대화하라.\n\n            현재 시각은 2026-02-23 15:48:12이다.\n            "
+            "\n            너희 AI들은 사용자의 요구에 맞는 책을 쓰는 작가 팀이다.\n            사용자가 사용하는 언어로 대화하라.\n\n            현재 시각은 2026-02-23 18:30:54이다.\n            "
         ],
         [
             "HumanMessage",
-            "안녕?"
+            "HYBE와 JYP를 비교하는 책을 써줘 우선 백터 검색부터 해"
         ],
         [
             "AIMessage",
-            "[Supervisor] agent='communicator' done=False description='사용자에게 현재 목차에 대한 추가 요구사항이 있는지 물어보고, 필요에 따라 목차를 업데이트하십시오.' done_at=''"
+            "[Supervisor] agent='vector_search_agent' done=True description='현재 사용자는 두 회사인 HYBE와 JYP를 비교하는 책을 요청했으며, 백터 검색을 통해 목차 작성을 위한 자료를 확보하라는 지시를 받았다.' done_at='2026-02-23 18:31:05'"
+        ],
+        [
+            "AIMessage",
+            "[VECTOR SEARCH AGENT] 다음 질문에 대한 검색 완료: ['HYBE 회사 개요', 'JYP 회사 개요', 'HYBE 주요 성과', 'JYP 주요 성과', 'HYBE와 JYP의 비즈니스 전략 비교']"
         ],
         [
             "AIMessageChunk",
-            "안녕하세요! 현재 책의 목차에 대한 추가 요구사항이 있는지 궁금합니다. 필요한 부분이 있으면 언제든지 말씀해 주세요. 추가적인 수정이나 개선이 가능한지 검토하고 반영하겠습니다. 감사합니다!"
-        ],
-        [
-            "HumanMessage",
-            "HYBE와 JYP를 비교하는 책을 써줘"
-        ],
-        [
-            "AIMessage",
-            "[Supervisor] agent='content_strategist' done=False description='사용자가 HYBE와 JYP를 비교하는 책을 요청했으므로, 제안된 목차를 바탕으로 콘텐츠 전략을 최종 확정하고, 전체 목차를 작성합니다.' done_at=''"
-        ],
-        [
-            "AIMessage",
-            "[Content Strategist] 목차 작성 완료"
-        ],
-        [
-            "AIMessageChunk",
-            "안녕하세요! 책의 최종 목차를 기반으로 진행되고 있습니다. HYBE와 JYP를 비교하는 콘텐츠 전략도 준비되었습니다. 특별히 추가하거나 수정하고 싶은 내용이 있으신가요? 언제든지 말씀해 주세요. 사용자님의 요구에 맞춰 최선의 결과물을 제공하도록 하겠습니다. 감사합니다!"
+            "지금까지의 진행 상황을 알려드리겠습니다.\n\nHYBE와 JYP를 비교하는 책을 작성하기 위해 벡터 검색을 통해 필요한 자료를 수집했습니다. 현재 수집된 검색 결과는 다음과 같습니다:\n\n1. **HYBE 회사 개요**\n2. **JYP 회사 개요**\n3. **HYBE 주요 성과**\n4. **JYP 주요 성과**\n5. **HYBE와 JYP의 비즈니스 전략 비교**\n\n이러한 자료를 바탕으로 좀 더 구체적인 내용을 정리하여 목차를 작성할 계획입니다.\n\n혹시 추가적으로 포함하고 싶은 내용이나, 특정 부분에 대해 더 알고 싶으신 점이 있을까요? 사용자의 의견을 반영하여 더 상세하고 유익한 책을 만들고자 합니다."
         ]
     ],
     "task_history": [
         {
-            "agent": "communicator",
+            "agent": "vector_search_agent",
             "done": true,
-            "description": "사용자에게 현재 목차에 대한 추가 요구사항이 있는지 물어보고, 필요에 따라 목차를 업데이트하십시오.",
-            "done_at": "2026-02-23 15:48:44"
-        },
-        {
-            "agent": "content_strategist",
-            "done": true,
-            "description": "사용자가 HYBE와 JYP를 비교하는 책을 요청했으므로, 제안된 목차를 바탕으로 콘텐츠 전략을 최종 확정하고, 전체 목차를 작성합니다.",
-            "done_at": "2026-02-23 15:49:19"
+            "description": "현재 사용자는 두 회사인 HYBE와 JYP를 비교하는 책을 요청했으며, 백터 검색을 통해 목차 작성을 위한 자료를 확보하라는 지시를 받았다.",
+            "done_at": "2026-02-23 18:31:02"
         },
         {
             "agent": "communicator",
             "done": true,
-            "description": "AI 팀의 진행 상황을 사용자에게 보고하고, 사용자의 의견을 파악하기 위해 대화를 나눈다.",
-            "done_at": "2026-02-23 15:49:20"
+            "description": "AI팀의 진행상황을 사용자에게 보고하고, 사용자의 의견을 파악하기 위해 대화를 나눈다.",
+            "done_at": "2026-02-23 18:31:05"
         }
-    ]
+    ],
+    "references": {
+        "queries": [
+            "HYBE 회사 개요",
+            "JYP 회사 개요",
+            "HYBE 주요 성과",
+            "JYP 주요 성과",
+            "HYBE와 JYP의 비즈니스 전략 비교"
+        ],
+        "docs": [
+            {
+                "source": "https://www.pwc.com/kr/ko/insights/samil-insight/economic-outlook2026.html",
+                "title": "2026년 국내외 경제전망 | 삼일PwC"
+            },
+            {
+                "source": "https://www.pwc.com/kr/ko/insights/samil-insight/economic-outlook2026.html",
+                "title": "2026년 국내외 경제전망 | 삼일PwC"
+            },
+            {
+                "title": "2026년 국내외 경제전망 | 삼일PwC",
+                "source": "https://www.pwc.com/kr/ko/insights/samil-insight/economic-outlook2026.html"
+            },
+            {
+                "source": "https://www.pwc.com/kr/ko/insights/samil-insight/economic-outlook2026.html",
+                "title": "2026년 국내외 경제전망 | 삼일PwC"
+            },
+            {
+                "title": "2026년 국내외 경제전망 | 삼일PwC",
+                "source": "https://www.pwc.com/kr/ko/insights/samil-insight/economic-outlook2026.html"
+            },
+            {
+                "source": "https://www.pwc.com/kr/ko/insights/samil-insight/economic-outlook2026.html",
+                "title": "2026년 국내외 경제전망 | 삼일PwC"
+            },
+            {
+                "title": "2026년 국내외 경제전망 | 삼일PwC",
+                "source": "https://www.pwc.com/kr/ko/insights/samil-insight/economic-outlook2026.html"
+            },
+            {
+                "title": "2026년 국내외 경제전망 | 삼일PwC",
+                "source": "https://www.pwc.com/kr/ko/insights/samil-insight/economic-outlook2026.html"
+            },
+            {
+                "source": "https://www.pwc.com/kr/ko/insights/samil-insight/economic-outlook2026.html",
+                "title": "2026년 국내외 경제전망 | 삼일PwC"
+            },
+            {
+                "source": "https://www.pwc.com/kr/ko/insights/samil-insight/economic-outlook2026.html",
+                "title": "2026년 국내외 경제전망 | 삼일PwC"
+            }
+        ]
+    }
 }

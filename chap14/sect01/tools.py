@@ -154,7 +154,7 @@ def add_web_pages_json_to_chroma(json_file, chunk_size=1000, chunk_overlap=100):
     )
 
 @tool
-def retriever (query: str, top_k: int = 5):
+def retrieve (query: str, top_k: int = 5):
     """주어진 query에 대해 백터 검색을 수행하고, 결과를 반환한다."""
     retriever = vectorstore.as_retriever(search_kwargs={"k":top_k})
     retrieved_docs = retriever.invoke(query)
@@ -175,5 +175,5 @@ if __name__ == '__main__':
 
     # add_web_pages_json_to_chroma(f'{current_path}/data/resources_2026_02_23_164125.json')
 
-    retrieved_docs = retriever.invoke({'query': '한국 경제의 위험 요소'})
+    retrieved_docs = retrieve.invoke({'query': '한국 경제의 위험 요소'})
     print(retrieved_docs)

@@ -4,7 +4,8 @@ from typing import Literal
 class Task(BaseModel):
     agent: Literal[
         "content_strategist",
-        "communicator"
+        "communicator",
+        "vector_search_agent"
     ] = Field(
         ...,
         description= """
@@ -14,6 +15,7 @@ class Task(BaseModel):
         AI 팀이 콘텐츠 전략을 결정하고, 전체 책의 목차를 작성한다.
         - communicator: AI 팀에서 해야할 일을 스스로 판단할 수 없을 때 사용한다. 
         사용자에게 진행 상황을 보고하고, 다음 지시를 물어본다.
+        - vector_search_agent: 벡터 DB 검색을 통해 목차(outline) 작성에 필요한 정보를 확보한다.
         """
     )
 

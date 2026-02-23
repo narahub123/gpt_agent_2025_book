@@ -1,15 +1,33 @@
 from tavily import TavilyClient
 from langchain_core.tools import tool
 from langchain_community.document_loaders import WebBaseLoader
+from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
 from datetime import datetime
 import json
 import os 
 absolute_path = os.path.abspath(__file__)
 current_path = os.path.dirname(absolute_path)
 
+from langchain_openai import OpenAIEmbeddings
+from langchain_chroma import Chroma
+
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# 오픈 AI Embedding 서정 
+embedding = OpenAIEmbeddings(model="text-embedding-3-large")
+
+# 크로마 DB 저장 경로 설정 
+persist_directory = f"{current_path}/data/chroma_store"
+
+# 크로마 객체 생성 
+vectorstore = Chroma(
+    persist_directory=persist_directory,
+    embedding_function=embedding
+)
 
 @tool
 def web_search(query: str):
@@ -47,6 +65,19 @@ def web_search(query: str):
     
     return results, resource_json_path
 
+def web_page_json_to_documents(json_file):
+    
+    with open(json_file, 'r', encoding='utf-8') as f:
+        resources = json.load(f)
+
+    documents = []
+
+    for web_page in resources:
+        document = web_page_to_document(web_page)
+        documents.append(document)
+    
+    return documents
+
 def load_web_page(url: str):
     loader = WebBaseLoader(url, verify_ssl=False)
 
@@ -60,9 +91,89 @@ def load_web_page(url: str):
 
     return content
 
+def web_page_to_document(web_page):
+    if len(web_page['raw_content']) > len(web_page['content']):
+        page_conent = web_page['raw_content']
+    else:
+        page_conent = web_page['content']
+
+    document = Document(
+        page_content=page_conent,
+        metadata={
+            'title': web_page['title'],
+            'source': web_page['url']
+        }
+    )
+
+    return document
+
+def split_documents(documents, chunk_size=1000, chunk_overlap=100):
+    print('Splitting documents...')
+    print(f"{len(documents)}개의 문서를 {chunk_size}자 크기로 중첩 {chunk_overlap}자로 분할합니다. \n")
+
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size, chunk_overlap = chunk_overlap
+    )
+
+    splits = text_splitter.split_documents(documents)
+
+    print(f"총 {len(splits)}개의 문서로 분할되었습니다.")
+
+    return splits
+
+def documents_to_chroma(documents, chunk_size=1000, chunk_overlap=100):
+    print("Documents를 Chroma DB에 저장합니다.")
+
+    urls = [document.metadata['source'] for document in documents]
+
+    stored_metadatas = vectorstore._collection.get()['metadatas']
+    stored_web_urls = [metadata['source'] for metadata in stored_metadatas]
+
+    new_urls = set(urls) - set(stored_web_urls)
+
+    new_documents = []
+
+    for document in documents:
+        if document.metadata['source'] in new_urls:
+            new_documents.append(document)
+            print(document.metadata)
+    
+    splits = split_documents(new_documents, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+
+    if splits:
+        vectorstore.add_documents(splits)
+    else:
+        print("No new urls to process")
+
+def add_web_pages_json_to_chroma(json_file, chunk_size=1000, chunk_overlap=100):
+    documents = web_page_json_to_documents(json_file)
+    documents_to_chroma(
+        documents,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap
+    )
+
+@tool
+def retriever (query: str, top_k: int = 5):
+    """주어진 query에 대해 백터 검색을 수행하고, 결과를 반환한다."""
+    retriever = vectorstore.as_retriever(search_kwargs={"k":top_k})
+    retrieved_docs = retriever.invoke(query)
+
+    return retrieved_docs
+
 if __name__ == '__main__':
-    results, resource_json_path = web_search.invoke("2026년 한국 경제 전망")
-    print(results)
+    # results, resource_json_path = web_search.invoke("2026년 한국 경제 전망")
+    # print(results)
 
     # result = load_web_page('https://eiec.kdi.re.kr/publish/columnView.do?cidx=15029&c-code=&pp=20&pg=&sel_year=2025&sel_month=01')
     # print(result)
+
+    # documents = web_page_json_to_documents(f'{current_path}/data/resources_2026_02_23_164125.json')
+
+    # splits = split_documents(documents)
+    # print(splits)
+
+    # add_web_pages_json_to_chroma(f'{current_path}/data/resources_2026_02_23_164125.json')
+
+    retrieved_docs = retriever.invoke({'query': '한국 경제의 위험 요소'})
+    print(retrieved_docs)

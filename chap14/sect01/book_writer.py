@@ -8,7 +8,7 @@ from typing import List
 
 from utils import save_state, get_outline, save_outline
 from models import Task
-from tools import retrieve
+from tools import retrieve, web_search, add_web_pages_json_to_chroma
 
 from datetime import datetime 
 
@@ -46,7 +46,9 @@ def supervisor(state:State):
         supervisor가 활용할 수 있는 agent는 다음과 같다.
         - content_strategist: 사용자의 요구 사항이 명확해졌을 대 사용한다. AI 팀의 콘텐츠 전략을 결정하고, 전체 책의 목차(outline)을 작성한다. 
         - communicator: AI 팀에서 해야 할 일을 스스로 판단할 수 없을 때 사용한다. 사용자에게 진행 상황을 보고하고, 다음 지시를 물어본다.
+        - web_search_agent: 웹 검색을 통해 목차(outline) 작성에 필요한 정보를 확보한다.
         - vector_search_agent: 벡터 DB 검색을 통해 목차(outline) 작성에 필요한 정복를 확보한다.
+        
 
         아래 내용을 고려하여, 현재 해야할 일이 무엇인지, 사용할 수 있는 agent를 단답으로 말하라,
         
@@ -95,11 +97,14 @@ def content_strategist (state: State):
         이전 대화 내용을 바탕으로 사용자의 요구 사항을 분석하고, AI팀이 쓸 책의 세부 목차를 결정한다.
 
         지난 목차가 있다면 그 버전을 사용자의 요구에 맞게 수정하고, 없다면 새로운 목차를 제안한다.
+        목차를 작성하는 데 필요한 정보는 '참고 자료'에 있으므로 활용한다.
         
         ---------------------------
         - 지난 목차 : {outline}
         ---------------------------
         - 이전 대화 내용 : {messages}
+        ---------------------------
+        - 참고 자료: {references}
         """
     )
 
@@ -113,7 +118,8 @@ def content_strategist (state: State):
     # 입력값 정의 
     inputs = {
         'messages': messages, 
-        "outline": outline
+        "outline": outline,
+        "references": state.get("references", {'queries': [], 'docs': []})
     }
 
     gathered = ''
@@ -152,7 +158,7 @@ def content_strategist (state: State):
 
     return {
         'messages': messages, 
-        'task_history': task_history
+        'task_history': task_history,
     }
 
 # 사용자와 대화할 노드(agent) : communicator 
@@ -304,6 +310,87 @@ def vector_search_agent(state: State):
         "references": references
     }
 
+# 웹 검색하는 노드 : web_search_agent
+def web_search_agent (state: State):
+    print("\n\n==============WEB SEARCH AGENT================")
+
+    tasks = state.get('task_history', [])
+    task = tasks[-1]
+
+    if task.agent != "web_search_agent":
+        raise ValueError(f"Web Search Agent가 아닌 agent가 Web Search를 시도하고 있습니다.. \n {task}")
+
+    web_search_system_prompt = PromptTemplate.from_template(
+        """
+        너는 다른 AI들이 수행한 작업을 바탕으로,
+        목차(outline) 작성에 필요한 정보를 웹 검색을 통해서 찾아내는 에이전트다.
+
+        현재 부족한 정보를 검색하고, 복합적인 질문은 나누어서 검색하라.
+
+        - 검색 목적 {mission}
+        -------------------------------
+        - 과거 검색 내용 : {references}
+        -------------------------------
+        - 이전 대화 내용 : {messages}
+        -------------------------------
+        - 목차 (outline) : {outline}
+        -------------------------------
+        - 현재 시각: {current_time}
+        """
+    )
+
+    messages= state.get("messages", [])
+
+    inputs= {
+        "mission": task.description,
+        "references": state.get("references", {"queries": [], "docs": []}),
+        "messages": messages,
+        "outline": get_outline(current_path),
+        'current_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    }
+
+    llm_with_web_search = llm.bind_tools([web_search])
+    web_search_chain = web_search_system_prompt | llm_with_web_search
+
+    search_plans = web_search_chain.invoke(inputs)
+
+    queries = []
+
+    for tool_call in search_plans.tool_calls:
+        print('------------------------------', tool_call)
+        args = tool_call['args']
+
+        queries.append(args['query'])
+
+        # 검색 결과 JSON 파일 경로 가져오기 
+        _, json_path = web_search.invoke(args)
+        print('json_path', json_path)
+
+        # JSON 파일을 크로마 DB에 추가 
+        add_web_pages_json_to_chroma(json_path)
+
+    tasks[-1].done = True
+    tasks[-1].done_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    task_desc = 'AI팀이 쓸 책의 세부 목차를 결정하기 위한 정보를 벡터 검색을 통해 찾아낸다.'
+    task_desc += f"다음 항목이 새로 추가되었다. \n: {queries}"
+
+    new_task = Task(
+        agent='vector_search_agent',
+        done=False,
+        description=task_desc,
+        done_at=""
+    )
+
+    tasks.append(new_task)
+
+    msg_str = f"[WEB_SEARCH_AGENT] 다음 질문에 대한 검색 완료: {queries}"
+    messages.append(AIMessage(msg_str))
+
+    return {
+        "messages": messages,
+        "task_history": tasks,
+    }
 
 
 # 상태 그래프 정의 
@@ -314,6 +401,7 @@ graph_builder.add_node("supervisor", supervisor)
 graph_builder.add_node("communicator", communicator)
 graph_builder.add_node("content_strategist", content_strategist)
 graph_builder.add_node("vector_search_agent", vector_search_agent)
+graph_builder.add_node("web_search_agent", web_search_agent)
 
 # Edges 
 graph_builder.add_edge(START, 'supervisor')
@@ -323,10 +411,12 @@ graph_builder.add_conditional_edges(
     {
         "content_strategist": "content_strategist",
         "communicator": "communicator",
-        "vector_search_agent": "vector_search_agent"
+        "vector_search_agent": "vector_search_agent",
+        "web_search_agent": "web_search_agent"
     }
 )
 graph_builder.add_edge('content_strategist', 'communicator')
+graph_builder.add_edge("web_search_agent", "vector_search_agent")
 graph_builder.add_edge('vector_search_agent', 'communicator')
 graph_builder.add_edge('communicator', END)
 

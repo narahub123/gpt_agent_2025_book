@@ -110,7 +110,7 @@ def supervisor(state:State):
         supervisor가 활용할 수 있는 agent는 다음과 같다.
         - content_strategist: 사용자의 요구 사항이 명확해졌을 대 사용한다. AI 팀의 콘텐츠 전략을 결정하고, 전체 책의 목차(outline)을 작성한다. 
         - communicator: AI 팀에서 해야 할 일을 스스로 판단할 수 없을 때 사용한다. 사용자에게 진행 상황을 보고하고, 다음 지시를 물어본다.
-        - web_search_agent: 웹 검색을 통해 목차(outline) 작성에 필요한 정보를 확보한다.
+        - web_search_agent: vector_search_agent를 시도하고, 검색 결과(references)에 필요한 정보가 부족한 경우 사용한다. 웹 검색을 통해 목차(outline) 작성에 필요한 정보를 확보한다.
         - vector_search_agent: 벡터 DB 검색을 통해 목차(outline) 작성에 필요한 정복를 확보한다.
         
 
@@ -157,7 +157,7 @@ def content_strategist (state: State):
 
     task_history = state.get('task_history', [])
     task = task_history[-1]
-    if task_history != "content_strategist":
+    if task.agent != "content_strategist":
                raise ValueError(f"Content Strategist가 아닌 agent가 목차 작성을 시도하고 있습니다. \n {task}")
 
     content_strategist_system_prompt = PromptTemplate.from_template(
@@ -268,16 +268,17 @@ def content_strategist (state: State):
     task_history[-1].done = True
     task_history[-1].done_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    new_task = Task(
-        agent='communicator',
-        done=False,
-        description="AI 팀의 진행 상황을 사용자에게 보고하고, 사용자의 의견을 파악하기 위해 대화를 나눈다.",
-        done_at=""
-    )
+    # # 다음 작업 communicator로 사용자와 대화하는 것이므로 새 작업 추가 
+    # new_task = Task(
+    #     agent='communicator',
+    #     done=False,
+    #     description="AI 팀의 진행 상황을 사용자에게 보고하고, 사용자의 의견을 파악하기 위해 대화를 나눈다.",
+    #     done_at=""
+    # )
 
-    task_history.append(new_task)
+    # task_history.append(new_task)
 
-    print(new_task)
+    # print(new_task)
 
 
     return {
@@ -541,9 +542,9 @@ graph_builder.add_conditional_edges(
         "web_search_agent": "web_search_agent"
     }
 )
-graph_builder.add_edge('content_strategist', 'communicator')
+graph_builder.add_edge('content_strategist', 'business_analysist')
 graph_builder.add_edge("web_search_agent", "vector_search_agent")
-graph_builder.add_edge('vector_search_agent', 'communicator')
+graph_builder.add_edge('vector_search_agent', 'business_analysist')
 graph_builder.add_edge('communicator', END)
 
 graph = graph_builder.compile()

@@ -32,6 +32,70 @@ class State(TypedDict):
     messages: List[AnyMessage | str]
     task_history: List[Task]
     references: dict
+    user_request: str
+
+# 사용자의 요구사항의 분석하는 노드 : business_analysist 
+def business_analysist (state: State):
+    print("\n\n==============BUSINESS ANALYSIST================")
+
+    business_analysist_system_prompt = PromptTemplate.from_template(
+        """
+        너는 책을 쓰는 AI 팀의 비즈니스 애널리스트로서,
+        AI 팀의 진행 사항과 '사용자요구사항'을 토대로, 
+        현 시점에서 '지난 요구 사항(previous_user_requests)'과 최근 사용자의 발언을 바탕으로 요구사항이 무엇인지 판단한다.
+        지난 요구 사항이 달성되었는지 판단하고, 현 시점에서 어떤 작업을 해야 하는지 결정한다.
+
+        다음과 같은 템플릿 형태로 반환한다. 
+        '''
+        - 목표 : OOOO \n 방법 : OOOO
+        '''
+        ---------------------------------------
+        - 지난 요구 사항 (previous_user_request)*: {previous_user_request}
+        ----------------------------------------
+        - 사용자 최근 발언 : {user_last_comment}
+        ---------------------------------------
+        - 참고자료 : {references}
+        ---------------------------------------
+        - 목차 (outline): {outline}
+        ---------------------------------------
+        "messages": {messages}
+        """
+    )
+
+    business_analysist_chain = business_analysist_system_prompt | llm | StrOutputParser()
+
+    #  상태 메시지 가져오기 
+    messages = state['messages']
+    
+    # 사용자의 마지막 발언 가져오기 
+    user_last_comment = None
+
+    for m in messages[::-1]:
+        if isinstance(m, HumanMessage):
+            user_last_comment = m.content
+            break
+    
+    # 입력값 정의 
+    inputs = {
+        "previous_user_request": state.get('user_request', None),
+        'references': state.get("references", {'queries': [], 'docs': []}),
+        "outline": get_outline(current_path),
+        'messages': messages, 
+        "user_last_comment": user_last_comment
+    }
+
+    user_request = business_analysist_chain.invoke(inputs)
+
+    business_analysist_message = f"[Business Analysist] {user_request}"
+    print(business_analysist_message)
+    messages.append(AIMessage(business_analysist_message))
+
+    save_state(current_path, state)
+
+    return {
+        'messages': messages,
+        'user_request': user_request
+    }
 
 # 다음에 할 일이 무엇인지 판단하는 노드 : supervisor 
 def supervisor(state:State):
@@ -402,9 +466,11 @@ graph_builder.add_node("communicator", communicator)
 graph_builder.add_node("content_strategist", content_strategist)
 graph_builder.add_node("vector_search_agent", vector_search_agent)
 graph_builder.add_node("web_search_agent", web_search_agent)
+graph_builder.add_node("business_analysist", business_analysist)
 
 # Edges 
-graph_builder.add_edge(START, 'supervisor')
+graph_builder.add_edge(START, 'business_analysist')
+graph_builder.add_edge('business_analysist', 'supervisor')
 graph_builder.add_conditional_edges(
     "supervisor", 
     supervisor_router,
@@ -437,6 +503,8 @@ state = State(
         )
     ],
     task_history=[],
+    references= {'queries': [], 'docs': []},
+    user_request=''
 )
 
 # 터미널 창에서 사용자의 입력을 받고 graph를 실행하는 부분 
